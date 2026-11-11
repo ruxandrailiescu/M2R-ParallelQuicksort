@@ -57,4 +57,51 @@ Code change: an optional 4th argument sets the algorithm order (a permutation of
 
 ## 3. Analysis
 
-*To do.*
+`Rscript scripts/analysis.R <csv>` prints the tables (saved in
+[`measurements_11-31_analysis.txt`](data/Ruxandras-MacBook-Air_2026-11-11/measurements_11-31_analysis.txt))
+and writes the figures next to the CSV.
+
+**Method**
+
+| | Original | New |
+|---|---|---|
+| Plot | Linear axes, raw points, no legend | ggplot on log–log axes, legend, 95% CI |
+| Summary statistic | None | Geometric mean with a t-based CI on log(time), because times are positive and right-skewed |
+| Speedup | Read off the plot | Paired per run (Seq/Par on the same array, in the same process) |
+| Crossover | "≈ 400 000", read off a plot with no data between 10⁵ and 10⁶ | Size above which Par stays faster, interpolated on log–log axes; 95% CI from a bootstrap (1000 resamples of the runs in each cell) |
+| Trend | None | `t = a + b·n·log₂n` fitted on log(t) for n ≥ 10⁵. Asymptotic speedup = b_Seq / b_Par |
+| Checks | None | Effect of algorithm position within a run, and drift over the execution order |
+
+![time](data/Ruxandras-MacBook-Air_2026-11-11/measurements_11-31_time.png)
+![speedup](data/Ruxandras-MacBook-Air_2026-11-11/measurements_11-31_speedup.png)
+
+| Thread level | Crossover n [95% CI] | Speedup at n = 10⁷ [95% CI] | Asymptotic speedup (fit) |
+|---|---|---|---|
+| 0 | none (≈ 1 for n ≥ 10⁴) | 1.00 [0.97, 1.02] | 1.00 |
+| 2 | 3 800 [3 300, 4 200] | 1.63 [1.50, 1.77] | 1.62 |
+| 4 | 8 100 [7 800, 8 500] | 2.36 [2.18, 2.56] | 2.41 |
+| 6 | 27 000 [26 000, 28 000] | 3.23 [3.03, 3.45] | 3.26 |
+| 8 | 92 000 [88 000, 98 000] | 3.68 [3.49, 3.88] | 4.01 |
+| 10 | 400 000 [390 000, 410 000] | 3.95 [3.78, 4.11] | 4.70 |
+
+**Findings**
+1. **The original "≈ 400 000" holds only for level 10.** The crossover is set by the thread level and moves 100-fold between levels 2 and 10.
+2. **Each thread costs about 12–24 µs to create and join.**
+   - Level 0 (a single thread) adds 24 µs at n = 100.
+   - Level 10 (~2047 threads) takes 27 ms at n = 10⁵, where Seq takes 7 ms.
+   - For small n, fewer threads are created because the sub-arrays run out.
+3. **The best level grows with n.**
+   - It leaves roughly 10³–10⁴ elements per leaf thread, so `L ≈ log₂(n / 5000)`; neighbouring levels are often within each other's CI.
+   - Below n ≈ 3 000, parallelism never pays.
+4. **Maximum speedup is about 4** (3.95 at 10⁷) on 4 performance + 4 efficiency cores.
+5. **At -O2, the custom Seq beats libc `qsort` by about 20%** (b ratio 0.83), probably because `qsort` calls the comparison function through a pointer.
+6. **Variability:** the median coefficient of variation per cell is 17% for Par, against under 3% for Seq and Libc. That confirms Par needs the larger number of repetitions.
+7. **Checks** ([drift figure](data/Ruxandras-MacBook-Air_2026-11-11/measurements_11-31_drift.png)):
+   - Running second or third instead of first changes times by 1.3% or less (only Libc is significant, about +1%).
+   - No significant drift: under 0.5% per 1000 runs.
+   - The very first runs after the build were up to 3.6× slower. This is a warm-up effect; the shuffle spread it out, but warm-up runs would remove it.
+8. **The extrapolation fails.** At n = 10⁸ (3 runs per level, [`extrapolation_check_1e8.csv`](data/Ruxandras-MacBook-Air_2026-11-11/extrapolation_check_1e8.csv)):
+   - Seq is 6% slower than predicted, and Libc 17% slower.
+   - The Par speedup is 3.0 (level 8) and 3.6 (level 10), against predictions of 4.0 and 4.7, and ranges from 1.9 to 4.4 across runs.
+   - The 1.6 GB working set on an 8 GB laptop that was already swapping is a different memory regime. The model is only valid within the measured range (10⁵–10⁷).
+   - The level-10 fit also overshoots the measured speedup at 10⁷ (4.70 vs 3.95), so the asymptotic speedups for levels 8 and 10 are unreliable.
