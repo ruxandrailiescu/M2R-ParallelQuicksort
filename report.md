@@ -29,7 +29,31 @@ These issues biased *what* was being measured, so they had to be fixed before re
 
 ## 2. Experimental design
 
-*To do.*
+Runner: `python3 scripts/run_benchmark.py [reps=30] [design_seed=42]`. It rebuilds the binary, then writes
+`data/<host>_<date>/measurements_<HH-MM>.csv` and a matching `.info` file.
+Code change: an optional 4th argument sets the algorithm order (a permutation of `spl`).
+
+| | Original | New | Why |
+|---|---|---|---|
+| Sizes | 5, from 10² to 10⁶ in ×10 steps | 21, log-spaced from 10² to 10⁷ (4 per decade) | Locate the crossover and see the shape of the curves; 10⁷ shows the asymptotic regime |
+| Thread level | 10 only | {0, 2, 4, 6, 8, 10} | Pilot: the best level is 4–8 depending on size. Level 0 (one thread, no split) isolates the thread-creation cost |
+| Repetitions | 5 | 30 per (size, level) | Pilot CV of Par ≈ 15%, so the 95% CI is about ±5.6% of the mean. Seq/Libc vary less (CV < 2%) and get 180 runs per size |
+| Run order | Sizes increasing, repetitions back to back | All 3780 runs shuffled (fixed seed) | Keeps drift (heat, background load) from lining up with any factor |
+| Algorithm order within a run | Always Seq → Par → Libc | Rotates through the 6 orders across repetitions (5 of each per cell); position recorded | Removes, and lets us measure, order and cache effects |
+| Input array | Seeded by the clock | Seed per (size, rep), shared across levels | Common random numbers: levels are compared on identical arrays; every run is reproducible |
+| Output | Text, parsed with Perl | Long CSV: `run,size,level,rep,seed,algo,position,time` | Read directly by R |
+| Metadata | None | `.info`: git commit, compile line, compiler, OS, CPU, power source, load average before/after, design, duration | Needed to interpret and compare runs |
+
+**Run:** [`data/Ruxandras-MacBook-Air_2026-11-11/measurements_11-31.csv`](data/Ruxandras-MacBook-Air_2026-11-11/measurements_11-31.csv)
+- 3780 runs (11 340 timings), 18 minutes, all outputs sorted.
+- Balance confirmed: 30 reps per cell, and each algorithm 1260 times in each position.
+- Load average rose from 2.4 to 3.0 during the run.
+
+**Limitations:**
+- One machine only.
+- Laptop running on battery with normal background apps (load is recorded).
+- Thread placement on the M1's performance vs efficiency cores is not controlled (macOS has no thread pinning).
+- Seq and Libc are measured in every run, so they are oversampled. That is the cost of keeping paired measurements within each run.
 
 ## 3. Analysis
 

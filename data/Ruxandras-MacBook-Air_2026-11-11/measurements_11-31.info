@@ -1,0 +1,13 @@
+date: 2026-11-11T11:31:50
+git: f262cef-dirty
+build: cc   -g -Wall -O2 -pthread -std=c99 -c -o parallelQuicksort.o parallelQuicksort.c
+cc   -g -Wall -O2 -pthread -std=c99 parallelQuicksort.o  -o parallelQuicksort
+compiler: Apple clang version 15.0.0 (clang-1500.3.9.4)
+os: macOS-14.6.1-arm64-arm-64bit-Mach-O
+cpu: Apple M1
+ncpu: 8
+power: Now drawing from 'Battery Power'
+load_before: (2.37109375, 2.01318359375, 1.8876953125)
+design: sizes=[100, 178, 316, 562, 1000, 1778, 3162, 5623, 10000, 17783, 31623, 56234, 100000, 177828, 316228, 562341, 1000000, 1778279, 3162278, 5623413, 10000000] levels=[0, 2, 4, 6, 8, 10] reps=30 design_seed=42 order=shuffled runs, algorithm order cycles over ['spl', 'slp', 'psl', 'pls', 'lsp', 'lps'] by rep
+load_after: (2.97705078125, 3.20068359375, 2.6923828125)
+duration_s: 1086

@@ -9,9 +9,10 @@
   (default 1M) and times both sequential quicksort and parallel (using
   Pthreads).
 
-  Usage: parallelQuicksort [size [thread_level [seed]]]
+  Usage: parallelQuicksort [size [thread_level [seed [order]]]]
   The seed fixes both the input array and the pivot choices; when
   omitted it is drawn from the clock. It is printed for reproducibility.
+  order is a permutation of "spl" (default): sequential, parallel, libc.
 */
 
 #define _POSIX_C_SOURCE 200809L /* rand_r, clock_gettime */
@@ -55,9 +56,7 @@ int compare_doubles(const void *a, const void *b);
 /*
 Main method:
 -generate random list
--time sequential quicksort
--time parallel quicksort
--time standard qsort
+-time sequential quicksort, parallel quicksort and standard qsort
 */
 int main(int argc, char *argv[])
 {
@@ -72,7 +71,8 @@ int main(int argc, char *argv[])
     level = atoi(argv[2]);
   if (argc >= 4)                //fixed seed, for reproducibility
     seed = (unsigned) strtoul(argv[3], NULL, 10);
-  printf("Size: %d, Level: %d, Seed: %u\n", NUM, level, seed);
+  const char *order = argc >= 5 ? argv[4] : "spl"; //algorithms to run, in order
+  printf("Size: %d, Level: %d, Seed: %u, Order: %s\n", NUM, level, seed, order);
 
   //Want to compare sorting on the same list,
   //so backup.
@@ -85,48 +85,25 @@ int main(int argc, char *argv[])
     lystbck[i] = 1.0 * rand_r(&rng) / RAND_MAX;
   }
 
-  //copy list.
-  memcpy(lyst, lystbck, NUM * sizeof(double));
+  //Time each algorithm on a fresh copy of the same list, in the given
+  //order (s: sequential, p: parallel, l: libc qsort).
+  for (const char *a = order; *a; a++) {
+    memcpy(lyst, lystbck, NUM * sizeof(double));
+    start = now();
+    switch (*a) {
+    case 's': quicksort(lyst, NUM, seed); break;
+    case 'p': parallelQuicksort(lyst, NUM, level, seed); break;
+    case 'l': qsort(lyst, NUM, sizeof(double), compare_doubles); break;
+    default: fprintf(stderr, "Unknown algorithm '%c'\n", *a); return 1;
+    }
+    diff = now() - start;
 
-
-  //Sequential quicksort, and timing.
-  start = now();
-  quicksort(lyst, NUM, seed);
-  diff = now() - start;
-
-  if (!isSorted(lyst, NUM)) {
-    printf("Oops, lyst did not get sorted by quicksort.\n");
+    const char *name = *a == 's' ? "Sequential" : *a == 'p' ? "Parallel" : "Built-in";
+    if (!isSorted(lyst, NUM)) {
+      printf("Oops, lyst did not get sorted by %s quicksort.\n", name);
+    }
+    printf("%s quicksort took: %.9f sec.\n", name, diff);
   }
-  printf("Sequential quicksort took: %.9f sec.\n", diff);
-
-
-
-  //Now, parallel quicksort.
-
-  //copy list.
-  memcpy(lyst, lystbck, NUM * sizeof(double));
-
-  start = now();
-  parallelQuicksort(lyst, NUM, level, seed);
-  diff = now() - start;
-
-  if (!isSorted(lyst, NUM)) {
-    printf("Oops, lyst did not get sorted by parallelQuicksort.\n");
-  }
-  printf("Parallel quicksort took: %.9f sec.\n", diff);
-
-
-
-  //Finally, built-in for reference:
-  memcpy(lyst, lystbck, NUM * sizeof(double));
-  start = now();
-  qsort(lyst, NUM, sizeof(double), compare_doubles);
-  diff = now() - start;
-
-  if (!isSorted(lyst, NUM)) {
-    printf("Oops, lyst did not get sorted by qsort.\n");
-  }
-  printf("Built-in quicksort took: %.9f sec.\n", diff);
 
   free(lyst);
   free(lystbck);
